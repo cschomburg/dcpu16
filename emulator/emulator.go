@@ -10,6 +10,8 @@ package emulator
 
 import (
 	"fmt"
+	"errors"
+	"io"
 )
 
 // UnknownOpError records an error when a missing opcode is encountered.
@@ -29,6 +31,7 @@ type DCPU struct {
 	PC uint16
 	SP uint16
 	O uint16
+	offset int
 }
 
 // NewDCPU creates a new DCPU instance.
@@ -36,7 +39,7 @@ func NewDCPU() (*DCPU) {
 	return &DCPU{
 		make([]uint16, 0x10000),
 		make([]uint16, 8),
-		0, 0, 0,
+		0, 0, 0, 0,
 	}
 }
 
@@ -53,40 +56,6 @@ func (d *DCPU) Load(mem []uint16) {
 	copy(d.RAM, mem)
 }
 
-// Memdump outputs the current state of the RAM.
-// If part is set to true, only non-null rows are printed.
-func (d *DCPU) Memdump(part bool) {
-	for l := 0; l < (len(d.RAM) / 8); l++ {
-		if part {
-			lineNull := true
-			for c := 0; c < 8; c++ {
-				if d.RAM[l*8+c] != 0 {
-					lineNull = false
-					break
-				}
-			}
-			if lineNull {
-				continue
-			}
-		}
-
-		fmt.Printf("0x%04x:    ", l*8)
-		for c := 0; c < 8; c++ {
-			fmt.Printf("0x%04x ", d.RAM[l*8+c])
-		}
-		print("\n")
-	}
-}
-
-// RDump outputs the current state of the registers.
-func (d *DCPU) RDump() {
-	fmt.Print("REGISTERS: ")
-	for _, word := range(d.R) {
-		fmt.Printf("0x%04x ", word)
-	}
-	fmt.Println()
-}
-
 // Exec runs the program saved in RAM until an error is encountered.
 func (d *DCPU) Exec() error {
 	for 0x0000 <= d.PC && d.PC <= 0xffff {
@@ -101,13 +70,11 @@ func (d *DCPU) Exec() error {
 // Step executes the next instruction in RAM.
 func (d *DCPU) Step() error {
 	word := d.nextWord()
-	op, a, b := d.GetOP(word)
-	//fmt.Printf("word: %04x, op: %x, a: %02x, b: %02x\n", word, op, a, b);
+	level, op, args := GetOp(word)
 
-	if op > 0x0 { // basic opcodes
-		aV, aP:= d.readValue(a)
-		bV, _ := d.readValue(b)
-		//fmt.Printf("%04x, %04x\n", aV, bV)
+	if level == 0 { // basic opcodes
+		aV, aP:= d.readValue(args[0])
+		bV, _ := d.readValue(args[1])
 
 		if aP == nil && op <= 0xc { // fail silently for setting literal a
 			return nil
@@ -135,20 +102,18 @@ func (d *DCPU) Step() error {
 		case 0x9: *aP = aV & bV; // AND
 		case 0xa: *aP = aV | bV; // BOR
 		case 0xb: *aP = aV ^ bV; // XOR
-		case 0xc: if aV != bV { d.ignoreNext() } // IFE
-		case 0xd: if aV == bV { d.ignoreNext() } // IFN
-		case 0xe: if aV <= bV { d.ignoreNext() } // IFG
-		case 0xf: if (aV & bV) == 0 { d.ignoreNext() } // IFB
+		case 0xc: if aV != bV { d.stepIgnore() } // IFE
+		case 0xd: if aV == bV { d.stepIgnore() } // IFN
+		case 0xe: if aV <= bV { d.stepIgnore() } // IFG
+		case 0xf: if (aV & bV) == 0 { d.stepIgnore() } // IFB
 		}
 
 		return nil
 	}
 
 	// non-basic opcodes
-	op, a, b = a, b, 0
-
 	if op == 0x01 { // JSR
-		aV, _ := d.readValue(a)
+		aV, _ := d.readValue(args[0])
 		d.SP--
 		d.RAM[d.SP] = d.PC
 		d.PC = aV
@@ -162,26 +127,16 @@ func (d *DCPU) Step() error {
 	return &UnknownOpError{d.PC, op}
 }
 
-// ignoreNext steps over the next instruction without executing it.
-func (d *DCPU) ignoreNext() {
-	word := d.nextWord()
-	op, a, b := d.GetOP(word)
-	if op > 0x0 { // basic opcodes
-		d.readValue(a)
-		d.readValue(b)
-		return
-	}
-
-	// non-basic opcodes
-	op, a, b = a, b, 0
-	if op == 0x01 { // JSR
-		d.readValue(a)
-		return
+// stepIgnore steps over the next instruction without executing it.
+func (d *DCPU) stepIgnore() {
+	_, _, args := GetOp(d.nextWord())
+	for _, v := range(args) {
+		d.readValueIgnore(v)
 	}
 }
 
 // readValue parses a value code and returns the referenced value and,
-// if applicable, a pointer to write to this location.
+// if applicable, a pointer to write to this location. May modify PC / SP.
 func (d *DCPU) readValue(v byte) (word uint16, ptr *uint16) {
 	switch {
 	case v <= 0x07: ptr = &d.R[v] // register
@@ -202,6 +157,17 @@ func (d *DCPU) readValue(v byte) (word uint16, ptr *uint16) {
 	return word, ptr
 }
 
+// readValueIgnore parses a value code and fetches the next word if needed
+// without modifying SP.
+func (d *DCPU) readValueIgnore(v byte) {
+	switch {
+	case v <= 0x0f: return
+	case v <= 0x17: d.nextWord() // [next word + register]
+	case v == 0x1e: d.nextWord() // [next word]
+	case v == 0x1f: d.nextWord() // next word (literal)
+	}
+}
+
 // nextWord returns the current word in memory and increments the program counter.
 func (d *DCPU) nextWord() uint16 {
 	word := d.RAM[d.PC]
@@ -209,10 +175,70 @@ func (d *DCPU) nextWord() uint16 {
 	return word
 }
 
-// GetOP splits a word into opcode and two arguments.
-func (d *DCPU) GetOP(word uint16) (op, a, b byte) {
+// GetOP splits a word into opcode and an array of arguments.
+// Basic returns the level of the op (0 = basic, 1 = non-basic).
+func GetOp(word uint16) (level int, op byte, args []byte) {
+	level = 0
 	op = byte(word & 0xf)
-	a = byte((word >> 4) & 0x3f)
-	b = byte((word >> 10) & 0x3f)
-	return op, a, b
+	word >>= 4
+	if op == 0x0 {
+		op = byte(word & 0x3f)
+		word >>= 6
+		level++
+	}
+	args = make([]byte, 2-level)
+	for i := 0; i < (2-level); i++ {
+		args[i] = byte(word & 0x3f)
+		word >>= 6
+	}
+	return level, op, args
+}
+
+func (d *DCPU) Read(p []byte) (n int, err error) {
+	for n = 0; n < len(p); n++ {
+		if d.offset >= len(d.RAM)*2 {
+			return n, io.EOF
+		}
+		pos := d.offset / 2
+		if d.offset % 2 == 0 {
+			p[n] = byte((d.RAM[pos] >> 8) & 0xff)
+		} else {
+			p[n] = byte(d.RAM[pos] & 0xff)
+		}
+		d.offset++
+	}
+	return n, nil
+}
+
+func (d *DCPU) Seek(offset int64, whence int) (ret int64, err error) {
+	switch (whence) {
+	case 0: ret = 0
+	case 2: ret = int64(len(d.RAM)*2)
+	}
+	ret += offset
+	switch {
+	case ret < 0:
+		ret = 0
+		err = errors.New("Seek offset below 0")
+	case ret >= int64(len(d.RAM)*2):
+		err = errors.New("Seek offset higher than RAM size")
+	}
+	d.offset = int(ret)
+	return ret, err
+}
+
+func (d *DCPU) Write(p []byte) (n int, err error) {
+	for i, b := range(p) {
+		if d.offset >= len(d.RAM)*2 {
+			return i-1, errors.New("Not enough space in RAM")
+		}
+		pos := d.offset / 2
+		if d.offset % 2 == 0 {
+			d.RAM[pos] = (d.RAM[pos] & 0x00ff) | (uint16(b) << 8)
+		} else {
+			d.RAM[pos] = (d.RAM[pos] & 0xff00) | uint16(b)
+		}
+		d.offset++
+	}
+	return len(p), nil
 }
