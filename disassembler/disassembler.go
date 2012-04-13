@@ -1,7 +1,7 @@
 package disassembler
 
 import (
-	"dcpu/emulator"
+	"dcpu16/emulator"
 	"fmt"
 )
 

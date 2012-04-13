@@ -1,8 +1,8 @@
 package main
 
 import (
-	"dcpu/debugger"
-	"dcpu/emulator"
+	"dcpu16/debugger"
+	"dcpu16/emulator"
 	"flag"
 	"fmt"
 	"os"
@@ -112,11 +112,11 @@ func printHelp(topic string) {
 	switch topic {
 	default:
 		fmt.Println(
-`Dcpu is an assembler suite targeting the DCPU-16.
+`Dcpu16 is an assembler suite targeting the DCPU-16.
 
 Usage:
 	
-	dcpu command [arguments]
+	dcpu16 command [arguments]
 
 The commands and their shorthands are:
 
