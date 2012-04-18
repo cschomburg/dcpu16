@@ -1,10 +1,9 @@
 package main
 
 import (
-	"dcpu16/assembler"
-	"dcpu16/debugger"
-	"dcpu16/emulator"
-	"dcpu16/words"
+	"github.com/xconstruct/dcpu16/debugger"
+	"github.com/xconstruct/dcpu16/emulator"
+	"github.com/xconstruct/dcpu16/words"
 	"flag"
 	"fmt"
 	"os"
@@ -28,7 +27,7 @@ func main() {
 	switch tool {
 	case "a": fallthrough
 	case "assemble":
-		runAssembler();
+		//runAssembler();
 	case "d": fallthrough
 	case "debug":
 		runDebugger()
@@ -117,7 +116,7 @@ func runDebugger() {
 func runDisassembler() {
 }
 
-func runAssembler() {
+/*func runAssembler() {
 	flag.Parse()
 	srcPath := flag.Arg(1)
 	if srcPath == "" {
@@ -137,9 +136,9 @@ func runAssembler() {
 	}
 
 
-	err = assembler.Assemble(src, dest)
+	//err = assembler.Assemble(src, dest)
 	assert(err)
-}
+}*/
 
 func printHelp(topic string) {
 	switch topic {

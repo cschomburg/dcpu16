@@ -2,5 +2,5 @@ package assembler
 
 import (
 	"testing"
-	"dcpu16/assembler/token"
+	"github.com/xconstruct/dcpu16/assembler/token"
 )

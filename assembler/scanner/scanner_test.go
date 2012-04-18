@@ -2,7 +2,7 @@ package scanner
 
 import (
 	"testing"
-	"dcpu16/assembler/token"
+	"github.com/xconstruct/dcpu16/assembler/token"
 )
 
 func scanExpect(t *testing.T, s *Scanner, expTok token.Token, expLit string) {

@@ -1,8 +1,8 @@
 package assembler
 
 import (
-	"dcpu16/assembler/scanner"
-	"dcpu16/assembler/token"
+	"github.com/xconstruct/dcpu16/assembler/scanner"
+	"github.com/xconstruct/dcpu16/assembler/token"
 	"fmt"
 	"runtime"
 	"strconv"

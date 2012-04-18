@@ -2,7 +2,7 @@ package scanner
 
 import (
 	"unicode"
-	"dcpu16/assembler/token"
+	"github.com/xconstruct/dcpu16/assembler/token"
 )
 
 type Scanner struct {

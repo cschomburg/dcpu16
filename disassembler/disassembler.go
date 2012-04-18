@@ -1,7 +1,7 @@
 package disassembler
 
 import (
-	"dcpu16/emulator"
+	"github.com/xconstruct/dcpu16/emulator"
 	"fmt"
 )
 
