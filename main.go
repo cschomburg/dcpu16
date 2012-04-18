@@ -1,8 +1,10 @@
 package main
 
 import (
+	"dcpu16/assembler"
 	"dcpu16/debugger"
 	"dcpu16/emulator"
+	"dcpu16/words"
 	"flag"
 	"fmt"
 	"os"
@@ -12,7 +14,7 @@ import (
 
 func assert(err error) {
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -24,15 +26,18 @@ func main() {
 		tool = os.Args[1]
 	}
 	switch tool {
-	case "e": fallthrough
-	case "emulate":
-		runEmulator()
+	case "a": fallthrough
+	case "assemble":
+		runAssembler();
 	case "d": fallthrough
 	case "debug":
 		runDebugger()
 	case "dis": fallthrough
 	case "disassemble":
 		runDisassembler()
+	case "e": fallthrough
+	case "emulate":
+		runEmulator()
 	default:
 		printHelp("");
 	}
@@ -48,8 +53,10 @@ func runEmulator() {
 
 	file, err := os.Open(path)
 	assert(err)
+
 	dcpu := emulator.NewDCPU()
-	_, err = io.Copy(dcpu, file)
+	ram := words.NewReadWriter(dcpu.RAM)
+	_, err = io.Copy(ram, file)
 	file.Close()
 	assert(err)
 	err = dcpu.Exec()
@@ -66,8 +73,10 @@ func runDebugger() {
 
 	file, err := os.Open(path)
 	assert(err)
+
 	dcpu := emulator.NewDCPU()
-	_, err = io.Copy(dcpu, file)
+	ram := words.NewReadWriter(dcpu.RAM)
+	_, err = io.Copy(ram, file)
 	file.Close()
 	assert(err)
 
@@ -108,6 +117,30 @@ func runDebugger() {
 func runDisassembler() {
 }
 
+func runAssembler() {
+	flag.Parse()
+	srcPath := flag.Arg(1)
+	if srcPath == "" {
+		fmt.Println("Usage: dcpu assemble source [destination]")
+		return
+	}
+	src, err := os.Open(srcPath)
+	assert(err)
+
+	var dest io.Writer
+	destPath := flag.Arg(2)
+	if destPath == "" {
+		dest = os.Stdout
+	} else {
+		dest, err = os.Open(destPath)
+		assert(err)
+	}
+
+
+	err = assembler.Assemble(src, dest)
+	assert(err)
+}
+
 func printHelp(topic string) {
 	switch topic {
 	default:
@@ -120,6 +153,7 @@ Usage:
 
 The commands and their shorthands are:
 
+	assemble    a      converts assmbler to machine code
 	debug       d      debug a program in the emulator
 	disassemble dis    converts machine code to assembler
 	emulate     e      execute a program in the emulator

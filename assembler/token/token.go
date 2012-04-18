@@ -1,6 +1,7 @@
 package token
 
 import (
+	"strings"
 	"strconv"
 )
 
@@ -8,7 +9,8 @@ type Token int
 
 const (
 	// Special tokens
-	ILLEGAL Token = iota
+	EMPTY Token = iota
+	ILLEGAL
 	EOF
 	COMMENT
 	LABEL
@@ -23,6 +25,7 @@ const (
 	PUSH
 	PEEK
 	POP
+	O
 
 	// Basic opcodes
 	OP_SET
@@ -57,6 +60,7 @@ const (
 )
 
 var tokens = [...]string{
+	EMPTY: "EMPTY",
 	ILLEGAL: "ILLEGAL",
 	EOF: "EOF",
 	COMMENT: "COMMENT",
@@ -71,6 +75,7 @@ var tokens = [...]string{
 	PUSH: "PUSH",
 	PEEK: "PEEK",
 	POP: "POP",
+	O: "O",
 
 	// Basic opcodes,
 	OP_SET: "SET",
@@ -114,6 +119,18 @@ func (tok Token) String() string {
 	return s
 }
 
+func (tok Token) IsBasicOp() bool {
+	return tok >= OP_SET && tok <= OP_IFB
+}
+
+func (tok Token) IsComplexOp() bool {
+	return tok == OP_JSR
+}
+
+func (tok Token) IsOp() bool {
+	return tok.IsBasicOp() || tok.IsComplexOp()
+}
+
 var keywords map[string]Token
 
 func init() {
@@ -124,6 +141,10 @@ func init() {
 }
 
 func Lookup (ident string) Token {
+	if tok, is_keyword := keywords[ident]; is_keyword {
+		return tok
+	}
+	ident = strings.ToLower(ident)
 	if tok, is_keyword := keywords[ident]; is_keyword {
 		return tok
 	}

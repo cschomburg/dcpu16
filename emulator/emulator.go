@@ -10,8 +10,6 @@ package emulator
 
 import (
 	"fmt"
-	"errors"
-	"io"
 )
 
 // UnknownOpError records an error when a missing opcode is encountered.
@@ -192,53 +190,4 @@ func GetOp(word uint16) (level int, op byte, args []byte) {
 		word >>= 6
 	}
 	return level, op, args
-}
-
-func (d *DCPU) Read(p []byte) (n int, err error) {
-	for n = 0; n < len(p); n++ {
-		if d.offset >= len(d.RAM)*2 {
-			return n, io.EOF
-		}
-		pos := d.offset / 2
-		if d.offset % 2 == 0 {
-			p[n] = byte((d.RAM[pos] >> 8) & 0xff)
-		} else {
-			p[n] = byte(d.RAM[pos] & 0xff)
-		}
-		d.offset++
-	}
-	return n, nil
-}
-
-func (d *DCPU) Seek(offset int64, whence int) (ret int64, err error) {
-	switch (whence) {
-	case 0: ret = 0
-	case 2: ret = int64(len(d.RAM)*2)
-	}
-	ret += offset
-	switch {
-	case ret < 0:
-		ret = 0
-		err = errors.New("Seek offset below 0")
-	case ret >= int64(len(d.RAM)*2):
-		err = errors.New("Seek offset higher than RAM size")
-	}
-	d.offset = int(ret)
-	return ret, err
-}
-
-func (d *DCPU) Write(p []byte) (n int, err error) {
-	for i, b := range(p) {
-		if d.offset >= len(d.RAM)*2 {
-			return i-1, errors.New("Not enough space in RAM")
-		}
-		pos := d.offset / 2
-		if d.offset % 2 == 0 {
-			d.RAM[pos] = (d.RAM[pos] & 0x00ff) | (uint16(b) << 8)
-		} else {
-			d.RAM[pos] = (d.RAM[pos] & 0xff00) | uint16(b)
-		}
-		d.offset++
-	}
-	return len(p), nil
 }

@@ -2,8 +2,6 @@ package emulator
 
 import (
 	"testing"
-	"os"
-	"io"
 )
 
 var notchMem  = []uint16{
@@ -34,31 +32,5 @@ func TestInvalidCode(t *testing.T) {
 		t.Errorf("No error, but expected UnknownOpError\n")
 	} else if e, ok := err.(*UnknownOpError); !ok {
 		t.Errorf("Expected UnknownOpError, but got: %s\n", e)
-	}
-}
-
-func TestIO(t *testing.T) {
-	file, err := os.Open("notch.bin")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	dcpu := NewDCPU()
-	_, err = io.Copy(dcpu, file)
-	file.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	dcpu.Seek(0, 0)
-
-	file, err = os.Create("write.bin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	io.Copy(file, dcpu)
-	file.Close()
-	if err != nil {
-		t.Fatal(err)
 	}
 }
