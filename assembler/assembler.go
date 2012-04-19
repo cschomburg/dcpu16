@@ -101,27 +101,68 @@ func (p *Parser) parseOp() {
 	p.gen[offs] = op
 }
 
+func registerOpCode(reg string) byte {
+	reg = strings.ToUpper(reg)
+	op := reg[0] - 'A'
+	if op < 0x00 || op > 0x07 {
+		return 0x00
+	}
+	return op
+}
+
 func (p *Parser) parseValue() (value byte) {
 	if p.tok.Tok == token.LBRACK { // indirect
 		p.nextImportant()
 
-		var register TokenType
-		op := token.ADD
-		var number uint16
-		hasNumber:= false
+		var register string
+		lastOp := token.ADD
+		var nextWord uint16
 
-		for {
+		FOR: for {
 			switch p.tok.Tok {
 			case token.INT:
-				hasNumber = true
 				n, err := strconv.ParseUint(p.tok.Lit, 0, 16)
 				if err != nil {
 					panic(err)
 				}
+				switch lastOp {
+				case token.ADD: nextWord += uint16(n)
+				case token.SUB: nextWord -= uint16(n)
+				default: unexpectedError()
+				}
+				lastOp = token.EMPTY
+			case token.REGISTER:
+				if register != "" {
+					expect(token.RBRACK)
+				}
+				register = register.Lit
+				lastOp = token.EMPTY
+			case token.ADD:
+				lastOp = token.ADD
+			case token.SUB:
+				lastOp = token.SUB
+			case token.RBRACK:
+				switch {
+				case register != "" && nextWord != 0:
+					value = registerOpCode(register) + 0x10
+					p.gen[p.pc] = nextWord
+					p.pc++
+				case register != "":
+					value = registerOpCode(register) + 0x08
+				case nextWord != 0:
+					value = 0x1e
+					p.gen[p.pc] = nextWord
+					p.pc++
+				default:
+					unexpectedError()
+				}
+				p.nextImportant()
+				break FOR
+			default:
+				unexpectedError()
 			}
-			p.expect(token.RBRACK)
+			p.nextImportant()
 		}
-
 	} else {
 		switch p.tok.Tok {
 		case token.POP: value = 0x18
@@ -130,6 +171,7 @@ func (p *Parser) parseValue() (value byte) {
 		case token.SP: value = 0x1b
 		case token.PC: value = 0x1c
 		case token.O: value = 0x1d
+		case token.REGISTER: value = registerOpCode(p.tok.Lit)
 		case token.INT:
 			n, err := strconv.ParseUint(p.tok.Lit, 0, 16)
 			if err != nil {
@@ -171,6 +213,8 @@ func (p *Parser) Parse(tokens []TokenType) (gen []uint16, err error) {
 		switch {
 		case p.tok.Tok.IsOp():
 			p.parseOp()
+		default:
+			unexpectedError();
 		}
 	}
 
