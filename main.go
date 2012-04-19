@@ -43,7 +43,11 @@ func main() {
 	case "hexdump":
 		runHexdump()
 	default:
-		printHelp("");
+		if len(os.Args) > 2 {
+			printHelp(os.Args[2]);
+		} else {
+			printHelp("");
+		}
 	}
 }
 
@@ -51,7 +55,7 @@ func runEmulator() {
 	flag.Parse()
 	path := flag.Arg(1)
 	if path == "" {
-		fmt.Println("Usage: dcpu debug [ramfile]")
+		printHelp("emulate")
 		return
 	}
 
@@ -71,7 +75,7 @@ func runDebugger() {
 	flag.Parse()
 	path := flag.Arg(1)
 	if path == "" {
-		fmt.Println("Usage: dcpu debug [ramfile]")
+		printHelp("debug")
 		return
 	}
 
@@ -125,7 +129,7 @@ func runAssembler() {
 	flag.Parse()
 	srcPath := flag.Arg(1)
 	if srcPath == "" {
-		fmt.Println("Usage: dcpu assemble source [destination]")
+		printHelp("assemble")
 		return
 	}
 	src, err := ioutil.ReadFile(srcPath)
@@ -151,7 +155,7 @@ func runHexdump() {
 	flag.Parse()
 	srcPath := flag.Arg(1)
 	if srcPath == "" {
-		fmt.Println("Usage: dcpu assemble source [destination]")
+		printHelp("hexdump")
 		return
 	}
 	src, err := ioutil.ReadFile(srcPath)
@@ -163,9 +167,16 @@ func runHexdump() {
 
 func printHelp(topic string) {
 	switch topic {
+	case "assemble":
+		fmt.Println(`Usage: dcpu assemble dasmfile [binfile]`)
+	case "debug":
+		fmt.Println("Usage: dcpu debug binfile")
+	case "emulate":
+		fmt.Println("Usage: dcpu emulate binfile")
+	case "hexdump":
+		fmt.Println(`Usage: dcpu hexdump binfile`)
 	default:
-		fmt.Println(
-`Dcpu16 is an assembler suite targeting the DCPU-16.
+		fmt.Println(`Dcpu16 is an assembler suite targeting the DCPU-16.
 
 Usage:
 	
