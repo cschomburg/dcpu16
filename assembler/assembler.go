@@ -3,6 +3,7 @@ package assembler
 import (
 	"github.com/xconstruct/dcpu16/assembler/scanner"
 	"github.com/xconstruct/dcpu16/assembler/token"
+	"errors"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -48,12 +49,19 @@ func OpCode(tok token.Token) byte {
 	return 0x0;
 }
 
+type FixLabel struct {
+	Offset uint16
+	Label string
+}
+
 type Parser struct {
 	tok TokenType
 	tokens []TokenType
 	offset int
 	gen []uint16
 	pc int
+	labels map[string]uint16
+	fixlabels []FixLabel
 }
 
 func (p *Parser) next() {
@@ -90,10 +98,11 @@ func (p *Parser) unexpectedError() {
 
 func (p *Parser) parseOp() {
 	offs := len(p.gen)
-	op := uint16(OpCode(p.tok.Tok))
+	op := uint16(0)
 	p.gen = append(p.gen, 0x00)
 
 	if p.tok.Tok.IsBasicOp() {
+		op += uint16(OpCode(p.tok.Tok))
 		p.nextImportant()
 		a := p.parseValue()
 		p.expect(token.COMMA)
@@ -102,8 +111,10 @@ func (p *Parser) parseOp() {
 		op |= uint16(a) << 4
 		op |= uint16(b) << 10
 	} else {
+		op += uint16(OpCode(p.tok.Tok)) << 4
+		p.nextImportant()
 		a := p.parseValue()
-		op |= uint16(a) << 4
+		op |= uint16(a) << 10
 	}
 
 	p.gen[offs] = op
@@ -181,6 +192,10 @@ func (p *Parser) parseValue() (value byte) {
 		case token.PC: value = 0x1c
 		case token.O: value = 0x1d
 		case token.REGISTER: value = registerOpCode(p.tok.Lit)
+		case token.IDENT:
+			value = 0x1f
+			p.fixlabels = append(p.fixlabels, FixLabel{uint16(len(p.gen)), p.tok.Lit})
+			p.gen = append(p.gen, 0x0000)
 		case token.INT:
 			n, err := strconv.ParseUint(p.tok.Lit, 0, 16)
 			if err != nil {
@@ -215,6 +230,8 @@ func (p *Parser) Parse(tokens []TokenType) (gen []uint16, err error) {
 	p.offset = -1
 	p.gen = make([]uint16, 0)
 	p.pc = 0
+	p.labels = make(map[string]uint16)
+	p.fixlabels = make([]FixLabel, 0)
 
 	p.nextImportant()
 	FOR: for {
@@ -223,9 +240,23 @@ func (p *Parser) Parse(tokens []TokenType) (gen []uint16, err error) {
 			p.parseOp()
 		case p.tok.Tok == token.EOF:
 			break FOR
+		case p.tok.Tok == token.LABEL:
+			if _, ok := p.labels[p.tok.Lit]; ok {
+				return nil, errors.New(fmt.Sprintf(`assembler: label "%s" already defined!`, p.tok.Lit))
+			}
+			p.labels[p.tok.Lit] = uint16(len(p.gen))
+			p.nextImportant()
 		default:
 			p.unexpectedError();
 		}
+	}
+
+	for _, fix := range p.fixlabels {
+		offset, ok := p.labels[fix.Label]
+		if !ok {
+			return nil, errors.New(fmt.Sprintf(`assembler: undefined label "%s"!`, p.tok.Lit))
+		}
+		p.gen[fix.Offset] = offset
 	}
 
 	return p.gen, nil

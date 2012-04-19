@@ -101,11 +101,11 @@ var tokens = [...]string{
 	OP_DAT: "DAT",
 
 	// Delimiters and misc,
-	COMMA: ",",
-	LBRACK: "[",
-	RBRACK: "]",
-	ADD: "+",
-	SUB: "-",
+	COMMA: "','",
+	LBRACK: "'['",
+	RBRACK: "']'",
+	ADD: "'+'",
+	SUB: "'-'",
 }
 
 func (tok Token) String() string {
