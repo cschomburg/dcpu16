@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 type TokenType struct {
@@ -19,10 +20,17 @@ type UnexpectedTokenError struct {
 }
 
 func (e *UnexpectedTokenError) Error() string {
-	if e.Exp.Tok == token.ILLEGAL {
-		return fmt.Sprintf("assembler: unexpected %s", e.Got.Tok)
+	got, exp := e.Got.Tok.String(), e.Exp.Tok.String()
+	if e.Got.Lit != "" {
+		got += `("`+e.Got.Lit+`")`
 	}
-	return fmt.Sprintf("assembler: unexpected %s, expected %s", e.Got.Tok, e.Exp.Tok)
+	if e.Exp.Lit != "" {
+		exp += `("`+e.Exp.Lit+`")`
+	}
+	if e.Exp.Tok == token.EMPTY {
+		return fmt.Sprintf("assembler: unexpected %s", got)
+	}
+	return fmt.Sprintf("assembler: unexpected %s, expected %s", got, exp)
 }
 
 type ExpectedTokenError struct {
@@ -81,14 +89,14 @@ func (p *Parser) unexpectedError() {
 }
 
 func (p *Parser) parseOp() {
-	offs := p.pc
+	offs := len(p.gen)
 	op := uint16(OpCode(p.tok.Tok))
-	p.pc++
+	p.gen = append(p.gen, 0x00)
 
 	if p.tok.Tok.IsBasicOp() {
 		p.nextImportant()
 		a := p.parseValue()
-		p.expect(token.COMMENT)
+		p.expect(token.COMMA)
 		p.nextImportant()
 		b := p.parseValue()
 		op |= uint16(a) << 4
@@ -101,13 +109,16 @@ func (p *Parser) parseOp() {
 	p.gen[offs] = op
 }
 
+var registers = []byte("ABCXYZIJ")
+
 func registerOpCode(reg string) byte {
-	reg = strings.ToUpper(reg)
-	op := reg[0] - 'A'
-	if op < 0x00 || op > 0x07 {
-		return 0x00
+	r := strings.ToUpper(reg)[0]
+	for i, ch := range registers {
+		if ch == r {
+			return byte(i)
+		}
 	}
-	return op
+	return 0x0
 }
 
 func (p *Parser) parseValue() (value byte) {
@@ -128,14 +139,14 @@ func (p *Parser) parseValue() (value byte) {
 				switch lastOp {
 				case token.ADD: nextWord += uint16(n)
 				case token.SUB: nextWord -= uint16(n)
-				default: unexpectedError()
+				default: p.unexpectedError()
 				}
 				lastOp = token.EMPTY
 			case token.REGISTER:
 				if register != "" {
-					expect(token.RBRACK)
+					p.expect(token.RBRACK)
 				}
-				register = register.Lit
+				register = p.tok.Lit
 				lastOp = token.EMPTY
 			case token.ADD:
 				lastOp = token.ADD
@@ -145,21 +156,19 @@ func (p *Parser) parseValue() (value byte) {
 				switch {
 				case register != "" && nextWord != 0:
 					value = registerOpCode(register) + 0x10
-					p.gen[p.pc] = nextWord
-					p.pc++
+					p.gen = append(p.gen, nextWord)
 				case register != "":
 					value = registerOpCode(register) + 0x08
 				case nextWord != 0:
 					value = 0x1e
-					p.gen[p.pc] = nextWord
-					p.pc++
+					p.gen = append(p.gen, nextWord)
 				default:
-					unexpectedError()
+					p.unexpectedError()
 				}
 				p.nextImportant()
 				break FOR
 			default:
-				unexpectedError()
+				p.unexpectedError()
 			}
 			p.nextImportant()
 		}
@@ -181,8 +190,7 @@ func (p *Parser) parseValue() (value byte) {
 				value = 0x20 + byte(n)
 			} else { // next word (literal)
 				value = 0x1f
-				p.gen[p.pc] = uint16(n)
-				p.pc++
+				p.gen = append(p.gen, uint16(n))
 			}
 		default:
 			p.unexpectedError()
@@ -209,12 +217,14 @@ func (p *Parser) Parse(tokens []TokenType) (gen []uint16, err error) {
 	p.pc = 0
 
 	p.nextImportant()
-	for {
+	FOR: for {
 		switch {
 		case p.tok.Tok.IsOp():
 			p.parseOp()
+		case p.tok.Tok == token.EOF:
+			break FOR
 		default:
-			unexpectedError();
+			p.unexpectedError();
 		}
 	}
 
