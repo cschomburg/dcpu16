@@ -4,6 +4,7 @@ package words
 import (
 	"errors"
 	"io"
+	"fmt"
 )
 
 // BytesToWord converts two bytes into a single word
@@ -108,4 +109,26 @@ func (rw *ReadWriter) Words() []uint16 {
 // NewReadWriter returns a new Reader reading from w.
 func NewReadWriter(w []uint16) * ReadWriter {
 	return &ReadWriter{w, 0}
+}
+
+// Hexdump displays the word slice in a readable format.
+func Hexdump(src []uint16, dest io.Writer) {
+	for l := 0; l < (len(src) / 8); l++ {
+		lineNull := true
+		for c := 0; c < 8; c++ {
+			if src[l*8+c] != 0 {
+				lineNull = false
+				break
+			}
+		}
+		if lineNull {
+			continue
+		}
+
+		fmt.Fprintf(dest, "0x%04x:    ", l*8)
+		for c := 0; c < 8; c++ {
+			fmt.Fprintf(dest, "0x%04x ", src[l*8+c])
+		}
+		fmt.Fprintln(dest)
+	}
 }

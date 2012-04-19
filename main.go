@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/xconstruct/dcpu16/assembler"
 	"github.com/xconstruct/dcpu16/debugger"
 	"github.com/xconstruct/dcpu16/emulator"
 	"github.com/xconstruct/dcpu16/words"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"io"
+	"io/ioutil"
 	"bufio"
 )
 
@@ -27,7 +29,7 @@ func main() {
 	switch tool {
 	case "a": fallthrough
 	case "assemble":
-		//runAssembler();
+		runAssembler();
 	case "d": fallthrough
 	case "debug":
 		runDebugger()
@@ -37,6 +39,9 @@ func main() {
 	case "e": fallthrough
 	case "emulate":
 		runEmulator()
+	case "h": fallthrough
+	case "hexdump":
+		runHexdump()
 	default:
 		printHelp("");
 	}
@@ -106,7 +111,7 @@ func runDebugger() {
 			if err != nil {
 				fmt.Println("dcpu err: ", err)
 			}
-		case "mem": debugger.Memdump(dcpu, true)
+		case "mem": words.Hexdump(dcpu.RAM, os.Stdout)
 		case "r":   debugger.RDump(dcpu)
 		case "op":  debugger.PrintInstruction(dcpu)
 		}
@@ -116,29 +121,45 @@ func runDebugger() {
 func runDisassembler() {
 }
 
-/*func runAssembler() {
+func runAssembler() {
 	flag.Parse()
 	srcPath := flag.Arg(1)
 	if srcPath == "" {
 		fmt.Println("Usage: dcpu assemble source [destination]")
 		return
 	}
-	src, err := os.Open(srcPath)
+	src, err := ioutil.ReadFile(srcPath)
 	assert(err)
 
-	var dest io.Writer
+	var destWriter io.Writer
 	destPath := flag.Arg(2)
 	if destPath == "" {
-		dest = os.Stdout
+		destWriter = os.Stdout
 	} else {
-		dest, err = os.Open(destPath)
+		destWriter, err = os.Open(destPath)
 		assert(err)
 	}
 
-
-	//err = assembler.Assemble(src, dest)
+	gen, err := assembler.Assemble(src)
 	assert(err)
-}*/
+	genReader := words.NewReadWriter(gen)
+	_, err = io.Copy(destWriter, genReader)
+	assert(err)
+}
+
+func runHexdump() {
+	flag.Parse()
+	srcPath := flag.Arg(1)
+	if srcPath == "" {
+		fmt.Println("Usage: dcpu assemble source [destination]")
+		return
+	}
+	src, err := ioutil.ReadFile(srcPath)
+	assert(err)
+	w := make([]uint16, len(src)/2)
+	words.CopyFromBytes(w, src)
+	words.Hexdump(w, os.Stdout)
+}
 
 func printHelp(topic string) {
 	switch topic {
@@ -152,10 +173,11 @@ Usage:
 
 The commands and their shorthands are:
 
-	assemble    a      converts assmbler to machine code
+	assemble    a      converts assembler to machine code
 	debug       d      debug a program in the emulator
 	disassemble dis    converts machine code to assembler
 	emulate     e      execute a program in the emulator
+	hexdump     h      display a binary file in readable format
 
 Use "dcpu help [command]" for more information about a command.`)
 	}

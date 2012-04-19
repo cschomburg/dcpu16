@@ -6,31 +6,6 @@ import (
 	"fmt"
 )
 
-// Memdump outputs the current state of the RAM.
-// If part is set to true, only non-null rows are printed.
-func Memdump(d *emulator.DCPU, part bool) {
-	for l := 0; l < (len(d.RAM) / 8); l++ {
-		if part {
-			lineNull := true
-			for c := 0; c < 8; c++ {
-				if d.RAM[l*8+c] != 0 {
-					lineNull = false
-					break
-				}
-			}
-			if lineNull {
-				continue
-			}
-		}
-
-		fmt.Printf("0x%04x:    ", l*8)
-		for c := 0; c < 8; c++ {
-			fmt.Printf("0x%04x ", d.RAM[l*8+c])
-		}
-		print("\n")
-	}
-}
-
 // RDump outputs the current state of the registers.
 func RDump(d *emulator.DCPU) {
 	for i, word := range(d.R) {
